@@ -133,6 +133,10 @@ def trace_ray(ray, objects, materials, skybox, depth=1, max_depth=5):
             new_ray = Ray(P, ray_dir, ray.tmin, ray.tmax)
 
         ## Color ##
+        throughput = material.albedo
+
+        if do_refraction:
+            throughput = np.ones(3) * np.exp(-material.absorption * closest_t)
 
 
         return material.emissive + material.albedo * trace_ray(new_ray, objects, materials, skybox, depth+1, max_depth)
