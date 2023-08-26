@@ -32,78 +32,85 @@ class Sphere():
             return [t1,t2], [self.normal(ray.P(t)) for t in [t1,t2]]
 
 @nb.experimental.jitclass([
-    ("vertices", nb.float64[:,:]),
-    ("faces", nb.int64[:,:]),
+    ("tree", nb.float64[:,:]),
+    ("min_ax", nb.float64[:]),
+    ("max_ax", nb.float64[:]),
     ("triangles", nb.float64[:,:,:]),
 ])
 class Mesh():
-    def __init__(self, vertices, faces, triangles):
-        self.vertices = vertices
-        self.faces = faces
+    def __init__(self, tree, min_ax, max_ax, triangles):
+        self.tree = tree
+        self.min_ax = min_ax
+        self.max_ax = max_ax
         self.triangles = triangles
 
-    @staticmethod
-    def point_in_triangle(P, triangle):
-        A,B,C = triangle
+    def get_node_children(self, node_index):
+        left_index = 2*node_index+1
+        right_index = 2*node_index+2
+        return left_index, right_index
 
-        # Move the triangle so that the point becomes the triangles origin
-        A -= P
-        B -= P
-        C -= P
+    def get_node_parent(self, node_index):
+        return int((node_index-1)/2)
 
-        u = np.cross(B, C)
-        v = np.cross(C, A)
-        w = np.cross(A, B)
+    def intersect_tree(self, ray):
+        stack = [(0, 0)]  # start with the root and depth 0
+        nearest = -1
 
+        while stack:
+            idx, depth = stack.pop()
 
-        #Test to see if the normals are facing the same direction, return false if not
-        if np.dot(u, v) < 0:
-            return False
-        if np.dot(u, w) < 0:
-            return False
-
-        # All normals facing the same way, return true
-        return True
-
-
-    def normal(self, P):
-        for triangle in self.triangles:
-
-            # check if point is on triangle
-            if self.point_in_triangle(P, triangle):
-                A,B,C = triangle
-                edgeAB = B - A
-                edgeAC = C - A
-                normal = np.cross(edgeAB, edgeAC)
-                return normal
-
-        return None
-
-    def intersect(self, ray):
-        closest_t = np.inf
-        closest_normal = np.array([0,0,0], dtype=np.float64)
-
-        for triangle in self.triangles:
-            A,B,C = triangle
-            edgeAB = B - A
-            edgeAC = C - A
-            normalVector = np.cross(edgeAB, edgeAC)
-            ao = ray.origin - A
-            dao = np.cross(ao, ray.direction)
-
-            determinant = -np.dot(ray.direction, normalVector)
-            invDet = 1 / determinant
-
-            t = np.dot(ao, normalVector) * invDet
-
-            if t < ray.tmin or t > ray.tmax:
+            if idx >= len(self.tree) or np.all(self.tree[idx] == np.zeros(3)-1):
                 continue
 
-            if t < closest_t:
-                closest_t = t
-                closest_normal = normalVector
+            axis = 0
 
-        return [closest_t], [closest_normal]
+            next_idx = None
+            opposite_idx = None
+
+            left_idx, right_idx = self.get_node_children(idx)
+
+            if ray.origin[axis] < self.tree[idx][axis]:
+                next_idx = left_idx
+                opposite_idx = right_idx
+            else:
+                next_idx = right_idx
+                opposite_idx = left_idx
+
+            if nearest == -1 or np.linalg.norm(self.tree[nearest] - ray.origin) > np.linalg.norm(self.tree[idx] - ray.origin):
+                nearest = idx
+
+
+            # We push opposite_idx first, so that next_idx is processed next in the loop
+            stack.append((opposite_idx, depth + 1))
+            stack.append((next_idx, depth + 1))
+
+        return nearest
+
+    def intersect(self, ray):
+
+        triangle_index = self.intersect_tree(ray)
+
+        if triangle_index == -1:
+            return [np.inf], [np.array([0,0,0],dtype=np.float64)]
+
+        triangle = self.triangles[self.intersect_tree(ray)]
+
+        A,B,C = triangle
+        edgeAB = B - A
+        edgeAC = C - A
+        normal_vector = np.cross(edgeAB, edgeAC)
+        ao = ray.origin - A
+
+        determinant = -np.dot(ray.direction, normal_vector)
+        invDet = 1 / determinant
+
+        t = np.dot(ao, normal_vector) * invDet
+
+        if t < ray.tmin or t > ray.tmax:
+            pass
+
+
+        return [t], [normal_vector]
 
 
 @nb.njit

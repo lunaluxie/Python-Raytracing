@@ -13,7 +13,7 @@ from trace import trace_ray
 from skybox import SkyBox
 from load_obj import load_obj
 
-@nb.njit(parallel=False)
+@nb.njit(parallel=True)
 def render(camera, objects, materials, skybox):
     xmin = -int(camera.resolution[0]//2)+1
     xmax = int(camera.resolution[0]//2)
@@ -23,7 +23,7 @@ def render(camera, objects, materials, skybox):
     for x in nb.prange(xmin, xmax):
         for y in nb.prange(ymin, ymax):
             color = np.array([0,0,0], dtype=np.float64)
-            n_samples = 1000
+            n_samples = 100
             print(x,y)
             for _ in nb.prange(n_samples):
                 noise = 1
@@ -52,8 +52,7 @@ if __name__ == "__main__":
     camera = Camera(position=np.array([0,0,-2],np.float64))
 
 
-    vertices, faces, triangles = load_obj("objects/teapot.obj")
-    teapot = Mesh(vertices, faces, triangles)
+    teapot = load_obj("objects/teapot.obj")
 
     objects = (teapot,)
     object_materials = (Material(albedo=np.array([1,1,1], dtype=np.float64),

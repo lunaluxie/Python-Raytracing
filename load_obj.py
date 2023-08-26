@@ -1,23 +1,7 @@
 
 import numpy as np
 
-class KDTreeNumba():
-    def __init__(self, tree, min_ax, max_ax, triangles):
-        self.tree = tree
-        self.min_ax = min_ax
-        self.max_ax = max_ax
-        self.triangles = triangles
-
-    def get_node_children(self, node_index):
-        node = self.tree[node_index]
-        left_index = 2*node_index+1
-        right_index = 2*node_index+2
-        return left_index, self.tree[left_index], right_index, self.tree[right_index]
-
-
-    def get_node_parent(self, node_index):
-        return int((node_index-1)/2)
-
+from primitives import Mesh
 
 def number_of_nodes_in_tree(kd_tree):
     if kd_tree is None:
@@ -34,10 +18,10 @@ def number_of_nodes_in_tree(kd_tree):
 
 def convert_kd_tree_to_numba(kd_tree):
     n_nodes = number_of_nodes_in_tree(kd_tree)*2
-    tree = np.zeros(shape=(n_nodes,3))
-    min_ax = np.zeros(n_nodes)
-    max_ax = np.zeros(n_nodes)
-    triangles = np.zeros(shape=(n_nodes,3,3))
+    tree = np.zeros(shape=(n_nodes,3))-1
+    min_ax = np.zeros(n_nodes)-1
+    max_ax = np.zeros(n_nodes)-1
+    triangles = np.zeros(shape=(n_nodes,3,3))-1
 
     def convert_node_to_array(node, index):
         tree[index] = node.center
@@ -81,57 +65,11 @@ def construct_kd_tree(triangles, axis=0):
 
     return Node(vals[median],
                 get_triangle_center(vals[median]),
-                get_triangle_center(vals[0])[axis],
-                get_triangle_center(vals[-1])[axis],
+                np.min(vals[0][:,axis]),
+                np.max(vals[-1][:,axis]),
                 axis,
                 left=left,
                 right=right)
-
-def intersect_kd_tree_node(ray, node):
-    if node is None:
-        return None
-
-    if node.left is None and node.right is None:
-        return node.triangle
-
-    if ray.direction[0] == 0:
-        return None
-
-    t = (node.center[0] - ray.origin[0]) / ray.direction[0]
-
-    if node.min_ax < t < node.max_ax:
-
-        if node.center[0] < t:
-            return intersect_kd_tree_node(ray, node.left)
-        else:
-            return intersect_kd_tree_node(ray, node.right)
-
-    else:
-        return None
-
-
-def intersesct_kd_tree(ray, kd_tree, index=0):
-    axis = 0
-    left_index, left, right_index, right = kd_tree.get_node_children(index)
-
-    # if left_index >= len(kd_tree.tree):
-    #     return None
-    # elif right_index >= len(kd_tree.tree):
-    #     return None
-
-    if ray.direction[axis] == 0:
-        return None
-
-    t = (kd_tree.tree[index][axis] - ray.origin[axis]) / ray.direction[axis]
-
-    if kd_tree.min_ax[index] < t < kd_tree.max_ax[index]:
-
-        if kd_tree.tree[index][0] < t:
-            return intersesct_kd_tree(ray, kd_tree, left_index)
-        else:
-            return intersesct_kd_tree(ray, kd_tree, right_index)
-
-
 
 def get_triangle_center(triangle):
     return (triangle[0] + triangle[1] + triangle[2]) / 3
@@ -161,34 +99,58 @@ def load_obj(filename):
 
     triangles = get_triangles(vertices, faces)
 
-    return np.array(vertices, dtype=np.float64), np.array(faces, dtype=np.int64), np.array(triangles, dtype=np.float64)
+    triangles = np.array(triangles)
+
+    kd_tree = construct_kd_tree(triangles)
+
+    tree, min_ax, max_ax, triangles = convert_kd_tree_to_numba(kd_tree)
+
+
+    return Mesh(tree, min_ax, max_ax, triangles)
+
+
+
+
+def intersect_tree(node, ray, depth=0):
+    if node is None:
+        return None
+
+    axis = 0
+    next_branch = None
+    opposite_branch = None
+
+    if ray.origin[axis] < node.center[axis]:
+        next_branch = node.left
+        opposite_branch = node.right
+    else:
+        next_branch = node.right
+        opposite_branch = node.left
+
+    # recursive search
+    nearest = intersect_tree(next_branch, ray, depth+1)
+
+    if nearest is None or np.linalg.norm(nearest.center - ray.origin) > np.linalg.norm(node.center - ray.origin):
+        nearest = node
+
+    return nearest
+
+
+
+
 
 
 if __name__ == "__main__":
-    vertices, faces, triangles = load_obj("objects/teapot.obj")
+    teapot = load_obj("objects/teapot.obj")
+
 
     from ray import Ray
-    from primitives import Mesh
 
-    r = Ray(np.array([0,0,0], np.float64), np.array([1,0,0], np.float64))
+    ray = Ray(np.array([0,0,0], dtype=np.float64), np.array([1,1,1], dtype=np.float64))
 
-    kd_tree = construct_kd_tree(triangles)
-    print(intersect_kd_tree_node(r, kd_tree))
+    print(teapot.intersect(ray))
 
 
-
-
-    tree, min_ax, max_ax, triangles = convert_kd_tree_to_numba(kd_tree)
-    kd_tree_numba = KDTreeNumba(tree, min_ax, max_ax, triangles)
-    print(kd_tree_numba)
-
-
-
-
-    print(intersesct_kd_tree(r, kd_tree_numba))
-
-
-    # print(intersect_kd_tree(r, kd_tree))
-
-    # mesh = Mesh(vertices, faces, triangles)
-    # print(mesh.intersect(r))
+    #print(intersect_tree(teapot, ray).triangle)
+    # [[-1.142888  0.046875 -0.594614]
+    # [-1.017621  0.0312   -0.529441]
+    # [-1.086146  0.0312   -0.364854]]
