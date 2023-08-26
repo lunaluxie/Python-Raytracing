@@ -5,14 +5,15 @@ import numpy as np
 from matplotlib import pyplot as plt
 from PIL import Image
 
-from primitives import Sphere
+from primitives import Sphere, Mesh
 from materials import Material
 from camera import Camera
 from ray import Ray
 from trace import trace_ray
 from skybox import SkyBox
+from load_obj import load_obj
 
-@nb.njit(parallel=True)
+@nb.njit(parallel=False)
 def render(camera, objects, materials, skybox):
     xmin = -int(camera.resolution[0]//2)+1
     xmax = int(camera.resolution[0]//2)
@@ -22,8 +23,8 @@ def render(camera, objects, materials, skybox):
     for x in nb.prange(xmin, xmax):
         for y in nb.prange(ymin, ymax):
             color = np.array([0,0,0], dtype=np.float64)
-            n_samples = 10000
-
+            n_samples = 1000
+            print(x,y)
             for _ in nb.prange(n_samples):
                 noise = 1
                 x_ = x + (np.random.rand()-0.5)*noise
@@ -51,58 +52,70 @@ if __name__ == "__main__":
     camera = Camera(position=np.array([0,0,-2],np.float64))
 
 
-    objects = (
-        Sphere(position=np.array((0,0,3),np.float64), radius=1),
-        Sphere(position=np.array((-2,0,4),np.float64),  radius=1),
-        Sphere(position=np.array((2,0,4),np.float64), radius=1),
-        Sphere(position=np.array((0,-5001,0),np.float64), radius=5000),
-        Sphere(position=np.array((-5,0,1),np.float64), radius=0.5),
-        Sphere(position=np.array((-2,0,1),np.float64), radius=0.5),
-    )
+    vertices, faces, triangles = load_obj("objects/teapot.obj")
+    teapot = Mesh(vertices, faces, triangles)
 
-
+    objects = (teapot,)
     object_materials = (Material(albedo=np.array([1,1,1], dtype=np.float64),
-                                 emissive=np.array([0,0,0], dtype=np.float64),
-                                 specular_chance=0.0,
-                                 reflection_chance=0.0,
-                                 refraction_chance=1.0,
-                                 absorption=0.5,
-                                 refractive_index=1.8),
-                        Material(albedo=np.array([0,0,1], dtype=np.float64),
-                                 emissive=np.array([0,0,0], dtype=np.float64),
-                                 specular_chance=0.0,
-                                 reflection_chance=0.0,
-                                 refraction_chance=0.0,
+                                 emissive=np.array([0.5,0.5,0.5], dtype=np.float64),
+                                 specular_chance=0.3,
+                                 reflection_chance=0.2,
+                                 refraction_chance=0,
                                  absorption=0,
-                                 refractive_index=1.0),
-                        Material(albedo=np.array([1,1,1], dtype=np.float64),
-                                 emissive=np.array([0,0,0], dtype=np.float64),
-                                 specular_chance=0.0,
-                                 reflection_chance=0.0,
-                                 refraction_chance=1.0,
-                                 absorption=0.5,
-                                 refractive_index=1.0),
-                        Material(albedo=np.array([0,1,1], dtype=np.float64),
-                                 emissive=np.array([0,0,0], dtype=np.float64),
-                                 specular_chance=0.0,
-                                 reflection_chance=0.0,
-                                 refraction_chance=0.0,
-                                 absorption=0.0,
-                                 refractive_index=1.0),
-                        Material(albedo=np.array([0,0,0], dtype=np.float64),
-                                 emissive=np.array([12,12,12], dtype=np.float64),
-                                 specular_chance=0.0,
-                                 reflection_chance=0.0,
-                                 refraction_chance=0.0,
-                                 absorption=0,
-                                 refractive_index=1.0),
-                        Material(albedo=np.array([0,0,0], dtype=np.float64),
-                                 emissive=np.array([12,12,12], dtype=np.float64),
-                                 specular_chance=0.0,
-                                 reflection_chance=0.0,
-                                 refraction_chance=0.0,
-                                 absorption=0,
-                                 refractive_index=1.0),)
+                                 refractive_index=1),)
+
+    # objects = (
+    #     Sphere(position=np.array((0,0,3),np.float64), radius=1),
+    #     Sphere(position=np.array((-2,0,4),np.float64),  radius=1),
+    #     Sphere(position=np.array((2,0,4),np.float64), radius=1),
+    #     Sphere(position=np.array((0,-5001,0),np.float64), radius=5000),
+    #     Sphere(position=np.array((-5,0,1),np.float64), radius=0.5),
+    #     Sphere(position=np.array((-2,0,1),np.float64), radius=0.5),
+    # )
+
+
+    # object_materials = (Material(albedo=np.array([1,1,1], dtype=np.float64),
+    #                              emissive=np.array([0,0,0], dtype=np.float64),
+    #                              specular_chance=0.0,
+    #                              reflection_chance=0.0,
+    #                              refraction_chance=1.0,
+    #                              absorption=0.5,
+    #                              refractive_index=1.8),
+    #                     Material(albedo=np.array([0,0,1], dtype=np.float64),
+    #                              emissive=np.array([0,0,0], dtype=np.float64),
+    #                              specular_chance=0.0,
+    #                              reflection_chance=0.0,
+    #                              refraction_chance=0.0,
+    #                              absorption=0,
+    #                              refractive_index=1.0),
+    #                     Material(albedo=np.array([1,1,1], dtype=np.float64),
+    #                              emissive=np.array([0,0,0], dtype=np.float64),
+    #                              specular_chance=0.0,
+    #                              reflection_chance=0.0,
+    #                              refraction_chance=1.0,
+    #                              absorption=0.5,
+    #                              refractive_index=1.0),
+    #                     Material(albedo=np.array([0,1,1], dtype=np.float64),
+    #                              emissive=np.array([0,0,0], dtype=np.float64),
+    #                              specular_chance=0.0,
+    #                              reflection_chance=0.0,
+    #                              refraction_chance=0.0,
+    #                              absorption=0.0,
+    #                              refractive_index=1.0),
+    #                     Material(albedo=np.array([0,0,0], dtype=np.float64),
+    #                              emissive=np.array([12,12,12], dtype=np.float64),
+    #                              specular_chance=0.0,
+    #                              reflection_chance=0.0,
+    #                              refraction_chance=0.0,
+    #                              absorption=0,
+    #                              refractive_index=1.0),
+    #                     Material(albedo=np.array([0,0,0], dtype=np.float64),
+    #                              emissive=np.array([12,12,12], dtype=np.float64),
+    #                              specular_chance=0.0,
+    #                              reflection_chance=0.0,
+    #                              refraction_chance=0.0,
+    #                              absorption=0,
+    #                              refractive_index=1.0),)
 
     image = Image.open("skyboxes/miramar.jpeg")
     image = np.array(image, dtype=np.float64)
