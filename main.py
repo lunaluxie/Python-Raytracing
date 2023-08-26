@@ -49,14 +49,21 @@ def render(camera, objects, materials, skybox):
 
 
 if __name__ == "__main__":
-    camera = Camera(position=np.array([0,0,-2],np.float64))
+    camera = Camera(position=np.array([0,0,-5],np.float64))
 
 
     teapot = load_obj("objects/teapot.obj")
 
-    objects = (teapot,)
+    objects = (teapot, Sphere(position=np.array([-5,0,0],np.float64), radius=0.5))
     object_materials = (Material(albedo=np.array([1,1,1], dtype=np.float64),
-                                 emissive=np.array([0.5,0.5,0.5], dtype=np.float64),
+                                 emissive=np.array([0.0,0.0,0.0], dtype=np.float64),
+                                 specular_chance=0.3,
+                                 reflection_chance=0.2,
+                                 refraction_chance=0,
+                                 absorption=0,
+                                 refractive_index=1),
+                        Material(albedo=np.array([0,0,0], dtype=np.float64),
+                                 emissive=np.array([5.0,5.0,5.0], dtype=np.float64),
                                  specular_chance=0.3,
                                  reflection_chance=0.2,
                                  refraction_chance=0,

@@ -31,6 +31,76 @@ class Sphere():
             t2 = (-b + np.sqrt(discriminant))/(2*a)
             return [t1,t2], [self.normal(ray.P(t)) for t in [t1,t2]]
 
+
+@nb.njit()
+def get_node_children(node_index):
+    left_index = 2*node_index+1
+    right_index = 2*node_index+2
+    return left_index, right_index
+
+@nb.njit()
+def intersect_tree(tree, ray):
+    stack = [(0, 0)]  # start with the root and depth 0
+    nearest = -1
+
+    while stack:
+        idx, depth = stack.pop()
+
+        if idx >= len(tree) or np.all(tree[idx] == np.zeros(3)-1):
+            continue
+
+        axis = 0
+
+        next_idx = None
+        opposite_idx = None
+
+        left_idx, right_idx = get_node_children(idx)
+
+        if ray.origin[axis] < tree[idx][axis]:
+            next_idx = left_idx
+            opposite_idx = right_idx
+        else:
+            next_idx = right_idx
+            opposite_idx = left_idx
+
+        if nearest == -1 or np.linalg.norm(tree[nearest] - ray.origin) > np.linalg.norm(tree[idx] - ray.origin):
+            nearest = idx
+
+
+        # We push opposite_idx first, so that next_idx is processed next in the loop
+        # stack.append((opposite_idx, depth + 1))
+        stack.append((next_idx, depth + 1))
+
+    return nearest
+
+
+@nb.njit()
+def _intersect(tree, triangles, ray):
+    triangle_index = intersect_tree(tree, ray)
+
+    if triangle_index == -1:
+        return [np.inf], [np.array([0,0,0],dtype=np.float64)]
+
+    triangle = triangles[triangle_index]
+
+    A,B,C = triangle
+    edgeAB = B - A
+    edgeAC = C - A
+    normal_vector = np.cross(edgeAB, edgeAC)
+    ao = ray.origin - A
+
+    determinant = -np.dot(ray.direction, normal_vector)
+    invDet = 1 / determinant
+
+    t = np.dot(ao, normal_vector) * invDet
+
+    if t < ray.tmin or t > ray.tmax:
+        pass
+
+
+    return [t], [normal_vector]
+
+
 @nb.experimental.jitclass([
     ("tree", nb.float64[:,:]),
     ("min_ax", nb.float64[:]),
@@ -44,92 +114,32 @@ class Mesh():
         self.max_ax = max_ax
         self.triangles = triangles
 
-    def get_node_children(self, node_index):
-        left_index = 2*node_index+1
-        right_index = 2*node_index+2
-        return left_index, right_index
-
     def get_node_parent(self, node_index):
         return int((node_index-1)/2)
 
-    def intersect_tree(self, ray):
-        stack = [(0, 0)]  # start with the root and depth 0
-        nearest = -1
-
-        while stack:
-            idx, depth = stack.pop()
-
-            if idx >= len(self.tree) or np.all(self.tree[idx] == np.zeros(3)-1):
-                continue
-
-            axis = 0
-
-            next_idx = None
-            opposite_idx = None
-
-            left_idx, right_idx = self.get_node_children(idx)
-
-            if ray.origin[axis] < self.tree[idx][axis]:
-                next_idx = left_idx
-                opposite_idx = right_idx
-            else:
-                next_idx = right_idx
-                opposite_idx = left_idx
-
-            if nearest == -1 or np.linalg.norm(self.tree[nearest] - ray.origin) > np.linalg.norm(self.tree[idx] - ray.origin):
-                nearest = idx
-
-
-            # We push opposite_idx first, so that next_idx is processed next in the loop
-            stack.append((opposite_idx, depth + 1))
-            stack.append((next_idx, depth + 1))
-
-        return nearest
 
     def intersect(self, ray):
-
-        triangle_index = self.intersect_tree(ray)
-
-        if triangle_index == -1:
-            return [np.inf], [np.array([0,0,0],dtype=np.float64)]
-
-        triangle = self.triangles[self.intersect_tree(ray)]
-
-        A,B,C = triangle
-        edgeAB = B - A
-        edgeAC = C - A
-        normal_vector = np.cross(edgeAB, edgeAC)
-        ao = ray.origin - A
-
-        determinant = -np.dot(ray.direction, normal_vector)
-        invDet = 1 / determinant
-
-        t = np.dot(ao, normal_vector) * invDet
-
-        if t < ray.tmin or t > ray.tmax:
-            pass
-
-
-        return [t], [normal_vector]
+        return _intersect(self.tree, self.triangles, ray)
 
 
 @nb.njit
 def closest_intersection(ray, objects):
-    closest_object = None
     closest_t = np.inf
     closest_index = -1
     closest_normal = np.array([0,0,0], dtype=np.float64)
-    for i, obj in enumerate(literal_unroll(objects)):
+
+    i = -1
+    for obj in literal_unroll(objects):
+        i += 1
         ts, normals = obj.intersect(ray)
         for t, normal in zip(ts, normals):
             if ray.tmin<=t<=ray.tmax:
                 if t<closest_t:
-                    closest_object = obj
                     closest_t = t
                     closest_index = i
                     closest_normal = normal
 
-    return closest_object, closest_t, closest_index, closest_normal
+    return closest_t, closest_index, closest_normal
 
 
 if __name__ == "__main__":
@@ -144,8 +154,6 @@ if __name__ == "__main__":
     P = r.P(closest_t)
     print(closest_object.normal(P))
     print(closest_normal)
-
-
 
 
     from load_obj import load_obj

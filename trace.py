@@ -66,11 +66,11 @@ def local2world(P_local, N_world):
 @nb.njit
 def trace_ray(ray, objects, materials, skybox, depth=1, max_depth=5):
 
-    closest_object, closest_t, closest_index, closest_normal = closest_intersection(ray, objects)
+    closest_t, closest_index, closest_normal = closest_intersection(ray, objects)
 
-    if closest_object is None:
+    if closest_t == np.inf:
         sphere = Sphere(np.array([0,0,0], np.float64), 1)
-        closest_object, closest_t, closest_index, closest_normal = closest_intersection(ray, (sphere,))
+        closest_t, closest_index, closest_normal = closest_intersection(ray, (sphere,))
 
         return skybox.get_color(ray.P(closest_t)-ray.origin)
     else:
