@@ -2,7 +2,7 @@
 
 ![header](images/header.png)
 
-Python path tracer using [Numba](https://github.com/numba/numba) for acceleration. 
+Python path tracer using [Numba](https://github.com/numba/numba) for acceleration. Read the [blog post here](https://lunalux.io/building-a-pretty-fast-path-tracer-in-python-from-scratch/) which walks you through the story behind the implementation. 
 
 ## Features
 ### Light Transport
